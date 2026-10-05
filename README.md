@@ -1,8 +1,8 @@
 # Secure Backend API
 
-A secure backend REST API built with **FastAPI**, **PostgreSQL**, **SQLAlchemy**, **Pydantic**, **JWT authentication**, and **password hashing**.
+A secure REST API built with **FastAPI, PostgreSQL, SQLAlchemy, JWT authentication, Argon2 password hashing, and role-based access control (RBAC)**.
 
-The project demonstrates user registration, secure password storage, login authentication, JWT-based authorization, protected routes, and role-based access control.
+This project demonstrates how to build a secure backend application with authentication, authorization, protected routes, database integration, validation, and file uploads.
 
 ## Features
 
@@ -11,16 +11,19 @@ The project demonstrates user registration, secure password storage, login authe
 * User login
 * JWT access-token authentication
 * Protected user profile endpoint
-* Role-based authorization
+* Role-Based Access Control (RBAC)
 * Admin-only endpoint
 * PostgreSQL database integration
 * SQLAlchemy ORM
 * Pydantic request and response validation
-* Automatic Swagger API documentation
+* Authentication service layer
+* Protected file upload endpoint
+* File type validation
 * Environment-variable configuration
-* `.env` protection using `.gitignore`
+* Automatic Swagger/OpenAPI documentation
+* Secure `.env` handling with `.gitignore`
 
-## Technologies Used
+## Technologies
 
 * Python
 * FastAPI
@@ -29,11 +32,33 @@ The project demonstrates user registration, secure password storage, login authe
 * SQLAlchemy
 * Psycopg
 * Pydantic
-* Pydantic Email Validator
 * PyJWT
 * pwdlib
 * Argon2
 * python-dotenv
+* python-multipart
+* pytest
+* httpx
+
+## Architecture
+
+The application follows a layered backend structure:
+
+```text
+Client
+  ↓
+FastAPI Router
+  ↓
+Dependencies / Authentication
+  ↓
+Service Layer
+  ↓
+SQLAlchemy ORM
+  ↓
+PostgreSQL
+```
+
+The service layer keeps business logic separate from API routing logic, making the application easier to maintain and extend.
 
 ## Project Structure
 
@@ -56,17 +81,24 @@ secure-backend/
 │   ├── routers/
 │   │   ├── __init__.py
 │   │   ├── auth.py
-│   │   └── users.py
+│   │   ├── users.py
+│   │   └── uploads.py
 │   │
 │   ├── schemas/
 │   │   ├── __init__.py
 │   │   └── user.py
 │   │
+│   ├── services/
+│   │   ├── __init__.py
+│   │   └── auth_service.py
+│   │
 │   └── utils/
 │       ├── __init__.py
-│       └── security.py
+│       ├── security.py
+│       └── logger.py
 │
-├── venv/
+├── uploads/
+│
 ├── .env
 ├── .env.example
 ├── .gitignore
@@ -76,9 +108,9 @@ secure-backend/
 
 ## Database
 
-The project uses PostgreSQL.
+The application uses PostgreSQL.
 
-Database name:
+Database:
 
 ```text
 secure_backend
@@ -90,16 +122,18 @@ Main table:
 users
 ```
 
-The `users` table contains:
+User fields:
 
-* `id`
-* `username`
-* `email`
-* `password`
-* `role`
-* `is_active`
+```text
+id
+username
+email
+password
+role
+is_active
+```
 
-Passwords are not stored as plain text. They are stored as secure password hashes.
+Passwords are never stored as plain text. They are stored using secure password hashing.
 
 ## Environment Variables
 
@@ -108,20 +142,25 @@ Create a `.env` file in the project root.
 Example:
 
 ```env
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/secure_backend
-
+DATABASE_URL=postgresql+psycopg://postgres:YOUR_PASSWORD@localhost:5432/secure_backend
 SECRET_KEY=your-long-secret-key-at-least-32-characters-long
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 ```
 
-Do not commit the real `.env` file to GitHub.
+Never commit the real `.env` file.
 
-Use `.env.example` as a template instead.
+Use `.env.example` as the configuration template.
 
 ## Installation
 
-Clone the project and open the project directory:
+Clone the repository:
+
+```bash
+git clone https://github.com/vanaja4503/secure-backend.git
+```
+
+Move into the project:
 
 ```bash
 cd secure-backend
@@ -133,10 +172,10 @@ Create a virtual environment:
 python -m venv venv
 ```
 
-Activate the virtual environment on Windows:
+Activate it on Windows PowerShell:
 
 ```powershell
-venv\Scripts\activate
+.\venv\Scripts\Activate.ps1
 ```
 
 Install dependencies:
@@ -145,42 +184,51 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 
-## Running the Application
+Create `.env` from `.env.example` and enter your local PostgreSQL credentials.
 
-Start the FastAPI server:
+## Run the Application
+
+Start the development server:
 
 ```bash
 uvicorn app.main:app --reload
 ```
 
-The application runs at:
+The API will run at:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-## API Documentation
-
-FastAPI automatically provides Swagger documentation.
-
-Open:
+Swagger documentation:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-You can use Swagger to:
+## API Endpoints
 
-1. Register a user
-2. Login
-3. Receive an access token
-4. Authorize the API
-5. Access protected endpoints
-6. Test admin authorization
+### Authentication
+
+| Method | Endpoint         | Description           |
+| ------ | ---------------- | --------------------- |
+| POST   | `/auth/register` | Register a new user   |
+| POST   | `/auth/login`    | Login and receive JWT |
+
+### User
+
+| Method | Endpoint       | Description                      |
+| ------ | -------------- | -------------------------------- |
+| GET    | `/users/me`    | Get authenticated user's profile |
+| GET    | `/users/admin` | Admin-only endpoint              |
+
+### Uploads
+
+| Method | Endpoint   | Description             |
+| ------ | ---------- | ----------------------- |
+| POST   | `/uploads` | Upload a protected file |
 
 ## Authentication Flow
-
-The authentication flow is:
 
 ```text
 User Registration
@@ -200,21 +248,129 @@ Authorization Header
 Protected Endpoint
 ```
 
-The authorization header uses the Bearer token format:
+The API uses the Bearer token format:
 
 ```text
 Authorization: Bearer <access_token>
 ```
 
-## User Registration
+## Role-Based Access Control
 
-Endpoint:
+The application supports:
 
 ```text
-POST /auth/register
+user
+admin
 ```
 
-Example request:
+Normal users can access:
+
+```text
+GET /users/me
+```
+
+Administrators can access:
+
+```text
+GET /users/admin
+```
+
+A normal user attempting to access the admin endpoint receives:
+
+```text
+403 Forbidden
+```
+
+After changing a user's database role from `user` to `admin`, the user must log in again to receive a new JWT containing the updated role.
+
+## File Uploads
+
+The application provides a protected upload endpoint.
+
+Example:
+
+```text
+POST /uploads
+```
+
+Uploaded files are stored locally in:
+
+```text
+uploads/
+```
+
+The upload directory is excluded from Git using `.gitignore`.
+
+File validation should be used to restrict unsupported or unsafe file types.
+
+## Security Practices
+
+This project demonstrates:
+
+* Password hashing with Argon2
+* JWT-based authentication
+* Protected API endpoints
+* Role-based authorization
+* PostgreSQL integration
+* Environment-variable configuration
+* Secret protection using `.gitignore`
+* Input validation using Pydantic
+* File upload validation
+* Separation of routing and business logic
+* Authentication dependency injection
+
+Never commit:
+
+```text
+.env
+venv/
+__pycache__/
+uploads/
+```
+
+## Testing
+
+Recommended authentication test flow:
+
+```text
+1. Register a user
+        ↓
+2. Verify the user in PostgreSQL
+        ↓
+3. Login
+        ↓
+4. Copy the JWT access token
+        ↓
+5. Authorize Swagger
+        ↓
+6. Test GET /users/me
+        ↓
+7. Test GET /users/admin
+        ↓
+8. Change role to admin
+        ↓
+9. Login again
+        ↓
+10. Test GET /users/admin
+```
+
+Recommended upload test flow:
+
+```text
+1. Login
+        ↓
+2. Authorize Swagger
+        ↓
+3. POST /uploads
+        ↓
+4. Select a test file
+        ↓
+5. Execute
+        ↓
+6. Verify the file inside uploads/
+```
+
+## Example Registration
 
 ```json
 {
@@ -224,45 +380,7 @@ Example request:
 }
 ```
 
-The password is hashed before it is stored in PostgreSQL.
-
-## User Login
-
-Endpoint:
-
-```text
-POST /auth/login
-```
-
-Example:
-
-```text
-username=testuser
-password=Test@123
-```
-
-A successful login returns an access token.
-
-Example response:
-
-```json
-{
-  "access_token": "eyJ...",
-  "token_type": "bearer"
-}
-```
-
-## Protected User Endpoint
-
-Endpoint:
-
-```text
-GET /users/me
-```
-
-This endpoint requires a valid JWT access token.
-
-Example response:
+## Example Successful Profile Response
 
 ```json
 {
@@ -273,124 +391,43 @@ Example response:
 }
 ```
 
-## Admin Authorization
-
-Endpoint:
-
-```text
-GET /users/admin
-```
-
-This endpoint requires the authenticated user's role to be:
-
-```text
-admin
-```
-
-A normal user receives:
-
-```text
-403 Forbidden
-```
-
-with:
+## Example Admin Response
 
 ```json
 {
-  "detail": "Admin access required"
+  "message": "Welcome Admin",
+  "username": "adminuser",
+  "role": "admin"
 }
-```
-
-An administrator can access the endpoint successfully.
-
-## Security
-
-This project demonstrates several security practices:
-
-* Passwords are hashed instead of stored as plain text.
-* JWT tokens are used for authentication.
-* Protected endpoints require authentication.
-* Admin endpoints require the correct user role.
-* Database credentials are stored in `.env`.
-* `.env` is excluded from Git.
-* A strong secret key should be used for JWT signing.
-
-## Testing the Authentication Flow
-
-Recommended testing order:
-
-```text
-1. Register a user
-       ↓
-2. Verify the user in PostgreSQL
-       ↓
-3. Login
-       ↓
-4. Copy the access token
-       ↓
-5. Authorize Swagger
-       ↓
-6. Test GET /users/me
-       ↓
-7. Test GET /users/admin
-```
-
-For an administrator test:
-
-```text
-1. Change the user's role to admin
-       ↓
-2. Login again
-       ↓
-3. Get a new JWT
-       ↓
-4. Authorize Swagger with the new token
-       ↓
-5. Test GET /users/admin
-```
-
-## Requirements
-
-The project's Python dependencies are listed in:
-
-```text
-requirements.txt
-```
-
-Install them using:
-
-```bash
-pip install -r requirements.txt
-```
-
-## Important
-
-Never upload these files or folders to GitHub:
-
-```text
-.env
-venv/
-__pycache__/
-```
-
-The `.gitignore` file should contain:
-
-```text
-venv/
-.env
-__pycache__/
-*.pyc
 ```
 
 ## Project Goal
 
-The purpose of this project is to demonstrate how to build a secure backend API using FastAPI and PostgreSQL with:
+The goal of this project is to demonstrate practical backend development using:
 
-* Authentication
-* Authorization
+* FastAPI
+* PostgreSQL
+* SQLAlchemy
+* JWT authentication
 * Password hashing
-* JWT tokens
-* Role-based access control
-* Database integration
+* RBAC
+* Dependency injection
+* Service-layer architecture
 * API validation
 * Protected routes
+* File upload handling
+* Environment-based configuration
+
+## Future Improvements
+
+Possible future enhancements include:
+
+* Automated test coverage
+* Database migrations with Alembic
+* Refresh tokens
+* Password reset functionality
+* Email verification
+* Rate limiting
+* Docker deployment
+* CI/CD using GitHub Actions
+* Production deployment
